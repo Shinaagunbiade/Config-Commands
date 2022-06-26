@@ -1,0 +1,8 @@
+- name: Deploy k8s manifest file
+  hosts: localhost
+  tasks: 
+    - name: Deploy SpringBoot Landmark App
+      k8s:
+      src: sbmongoapp.yaml
+      state: present
+      kubeconfig: ~/.kube/config

@@ -1,0 +1,22 @@
+pipeline{
+    agent any
+    stages{
+        stage('UnDeploy'){
+            steps{
+                sh "echo Undeploying existing application"
+                sh "docker rm -f mywebapp"
+            }
+        }
+        stage('deployment'){
+            steps{
+                sh "echo application now ready for deployment"
+                sh "docker run --name mywebapp -d -p 8000:8080 aanuoluwapoakinyera/new-landmark-app"
+            }
+        }
+        stage('emailNotification'){
+            steps{
+                sh "echo deployment successful"
+            }
+        }
+    }
+}

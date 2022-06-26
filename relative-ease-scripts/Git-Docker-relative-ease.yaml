@@ -1,0 +1,259 @@
+==============================================================================================
+RELATIVE EASE SCRIPT TO BUILD AND DEPLOY A CONTAINER TO DOCKER FROM GIT ON AN UBUNTU SERVER
+==============================================================================================
+- Create an EC2 instance on Ubuntu 18.04 AMI on AWS 
+    Choose t3.xlarge instance type
+    Change instance size to 15GB
+    Name tag DockerEngine
+    Use a security group with all ports open (or for security sake, only SSH open)
+
+- SSH into your newly created instance and run the following command below line by line
+    $ sudo hostname docker
+    $ sudo apt update -y
+    $ sudo apt install docker.io -y
+    $ sudo usermod -aG docker ubuntu
+    $ # Install java as jenkins dependency
+    $ sudo apt install openjdk-11-jdk -y
+    $ # install jenkis in ubuntu:
+    $ sudo wget -q -O - https://pkg.jenkins.io/debian-stable/jenkins.io.key | sudo apt-key add -
+    $ sudo sh -c 'echo deb https://pkg.jenkins.io/debian-stable binary/ > \
+      /etc/apt/sources.list.d/jenkins.list'
+    $ sudo apt-get update
+    $ sudo apt-get install jenkins -y 
+    $ sudo systemctl start jenkins 
+    $ echo "jenkins  ALL=(ALL) NOPASSWD:ALL" | sudo tee /etc/sudoers.d/jenkins
+    $ sudo echo "jenkins:admin" | chpasswd
+    $ sudo sed -i "/^[^#]*PasswordAuthentication[[:space:]]no/c\PasswordAuthentication yes" /etc/ssh/sshd_config
+    $ sudo service sshd restart
+    $ sudo usermod -aG  docker jenkins
+    $ sudo apt-get update
+# You can also copy this into a shell script (remember to start the top line with #!/bin/bash).
+# Either way, the end result should make your terminal user output "jenkins@docker"
+# You can also download the shell script from github using $ wget https://github.com/aanuoluwapoakinyera/k8s-configuration/blob/main/docker-Jenkins-installation-ubuntu_script.sh
+# Remember to run line by line. Running as shell script didnt work for me on Ubuntu
+
+- Switch to Jenkins user
+    $ sudo su - jenkins
+
+- Test the docker ps command to see if your entire installation worked well
+    $ docker ps
+  It should return CONTAINER ID   IMAGE etc without asking for password
+
+- Login to you Docker Hub account with docker login command
+    $ docker login -u aanuoluwapoakinyera
+    #that username must be your own username and it will prompt for your password. Enter your password
+
+- Create and run the SonarQube Docker container from Dockerhub with the below command
+    $ docker run --name sonar -d -p 5000:9000 sonarqube
+    # this should create a sonarqube container in your running container list
+    # essential to note that docker run command both pulls your image and starts it
+
+- Create and run the Nexus Docker container from Dockerhub with the below command
+    $ docker run --name nexus -d -p 4000:8081 sonatype/nexus3
+    # this should create a nexus container in your running container list
+
+- Enter the docker ps command to confirm that sonarqube and nexus containers have been downloaded
+    $ docker ps
+
+- Get the IP address of your Docker server
+    $ curl ifconfig.co
+    #the ip address returned from the command is what you will use in the next steps
+
+- Access the Sonarqube server by visiting the site on port 5000 (that was forwarded from the docker run command) on the browser
+    http://yourserverip:5000
+    Enter the default username and password: 
+      username: admin
+      password: admin
+    It will prompt you to change the password by entering the old and new passwords.
+      old password: admin
+      new password: admin123
+      confirm password: admin123
+
+- Access the Nexus server by visiting the site on port 4000 (that was forwarded from the docker run command) on the browser
+    http://yourserverip:4000
+    Click on sign in; it would require the initial password stored in the container and can be assessed by: 
+        $ docker exec nexus cat /nexus-data/admin.password
+    Note that the password is joined to the terminal command hence copy only the password (before Jenkins@)
+    Enter the new password after logging in with the default password: 
+      username: admin
+      password: admin123
+    Disable anonymous access since we want to know who logged in.
+
+- Create a repository on nexus GUI by clicking on Settings -> Repositories -> Create Repository -> maven2(hosted)
+
+    Repository name should be "ci-job-snapshot"
+
+    Select version policy to be "Snapshot"
+    Click create
+
+- Fork the maven web app repository into your Github account
+    Navigate to the repository: 
+      https://github.com/aanuoluwapoakinyera/maven-web-application 
+    At the top right section of the page, click on "Fork" and follow the prompt to fork to your Github account.
+
+- Once you have the Maven web app in your account, open the pom.xml file, click on edit and update the following sections with the updated IP addresses and port numbers
+    <properties>
+      ... <!-- XML codes before --> ...
+      <sonar.host.url>http://yourserverip:5000/</sonar.host.url>
+      ... ... <!-- XML codes after --> ...
+	  </properties>
+  Second update is in the distribution management tag:
+    <distributionManagement>
+	    ... <!-- XML codes before --> ...
+	    <snapshotRepository>
+	      ... <!-- XML codes before --> ...
+	      <url>http://yourserverip:4000/repository/ci-job-snapshot/</url>
+	    </snapshotRepository>
+	    ... <!-- XML codes after --> ...
+	  </distributionManagement>
+
+- Go to Jenkins GUI to set up your CI/CD environment and create your pipeline
+    You can access it from port 8080 with your server IP
+    http://yourserverip:8080
+
+- Jenkins would request that you unlock before you can use. The password can be found with command below 
+    $ cat /var/lib/jenkins/secrets/initialAdminPassword
+
+- Install the suggested plugins as prompted by Jenkins as they are critical to proper functioning of your CI/CD jobs
+
+- Create a username and password you can easily remember and enter your name and email; dummy below
+    Username: admin
+    Password: admin123
+    Confirm password: admin123
+    Full name: Jenkins admin
+    Email address: admin@jenkinsserver.com
+
+- Confirm the instance configuration for the Jenkins URL since it is the same instance IP and port
+
+- From the Jenkins dashboard, go to manage Jenkins, then global tool configuration, scroll down to the end of the page
+  Click on Add Maven, Name should be maven3.8.4 and select "3.8.4" from the dropdown in "Install from Apache version"
+  Click apply then save
+
+- On Jenkins GUI dashboard, navigate to New Item and enter the item name as "tools-install", select pipeline as the job type
+  Click Ok. 
+
+    Scroll down to pipeline section in the next page that follows and copy the below script into the pipeline section: 
+
+    pipeline{
+      agent any
+      tools{
+          maven "maven3.8.4"
+      }
+      stages{
+        stage('GitClone'){
+          steps{
+              sh "echo cloning the latest application version"
+              git "https://github.com/aanuoluwapoakinyera/maven-web-application"
+          }
+        }
+      }
+    }
+
+  Click apply then save
+  Click build now.
+  #This process is required to create the tools folder in Jenkins so the Nexus-Maven integration can be configured; 
+  #i.e in order to create a tools directory in Jenkins server.
+
+- vi into the maven settings.xml file in your docker server and update the username and password required for nexus to work
+    $ vi tools/hudson.tasks.Maven_MavenInstallation/maven3.8.4/conf/settings.xml 
+
+    Scroll down to the <servers> (the servers is with plural not singular) and just before the end of the closing </servers> tag, paste the below command:
+      <server>
+        <id>nexus</id>
+        <username>admin</username>
+        <password>admin123</password>
+      </server>
+
+- On Jenkins GUI dashboard, navigate to New Item and enter the item name as "ci-job", select pipeline as the job type
+  Click Ok. 
+  Scroll down to pipeline section in the next page that follows and copy the below script into the pipeline section: 
+  #Remember to change the username aanuoluwapoakinyera to your username and use your github URL too.
+    pipeline{
+      agent any
+      tools{
+          maven "maven3.8.4"
+      }
+      stages{
+          stage('GitClone'){
+              steps{
+                  sh "echo cloning the latest application version"
+                  git "https://github.com/aanuoluwapoakinyera/maven-web-application"
+              }
+          }
+          stage('TestBuild'){
+              steps{
+                  sh "echo Running unit test testing"
+                  sh "echo unitTesting ok. Creating packages"
+                  sh "mvn clean package"
+                  sh "echo Artifacts created"
+              }
+          }
+          stage('codeQuality'){
+              steps{
+                  sh "echo Running code quality report"
+                  sh "mvn sonar:sonar"
+              }
+          }
+          stage('uploadArtifact'){
+              steps{
+                  sh "echo upload artifacts into Nexus"
+                  sh "mvn deploy"
+              }
+          }
+          stage('message'){
+              steps{
+                  sh "echo CI job successful"
+              }
+          }
+          stage('predeployment'){
+              steps{
+                  sh "docker build -t aanuoluwapoakinyera/new-landmark-app . "
+                  //sh "docker login -u aanuoluwapoakinyera not needed because we logged in manually already"
+                  sh "docker push aanuoluwapoakinyera/new-landmark-app"
+              }
+          }
+      }
+    }
+
+# You can choose to discard old builds - Check "Discard old builds" then enter 30 days to keep builds and 5 as Max # of builds to keep
+
+Click on Apply then save.
+
+- On Jenkins GUI dashboard, navigate to New Item and enter the item name as "cd-job", select pipeline as the job type
+  Click Ok. 
+  Scroll down to pipeline section in the next page that follows and copy the below script into the pipeline section: 
+    pipeline{
+      agent any
+      stages{
+          stage('UnDeploy'){
+              steps{
+                  sh "echo Undeploying existing application"
+                  sh "docker rm -f maven-web-app"
+              }
+          }
+          stage('deployment'){
+              steps{
+                  sh "echo application now ready for deployment"
+                  sh "docker run --name maven-web-app -d -p 8000:8080 aanuoluwapoakinyera/new-landmark-app"
+              }
+          }
+          stage('emailNotification'){
+              steps{
+                  sh "echo deployment successful"
+              }
+          }
+      }
+    }
+
+  After copying the pipeline script, check on the box "Build after other projects have built"; enter ci-job as the project to watch.
+  Click on Apply then save.
+
+- Go back to the dashboard, click on ci-job and then build. A successful CI build will trigger the CD job without stress. You should have your deployment directly to docker. 
+
+- Access your application running on docker container on your browser: 
+    http://yourserverip:8000/maven-web-app/
+
+#==================================================================================================================================
+#To enhance automation, you can also enable GIT webhook or Poll SCM to build automatically when there is a change in GIT commit. 
+#### DONE #####
+#===================================================================================================================================

@@ -1,0 +1,183 @@
+PROVISIONING AWS EKS INFRASTRUCTURE MANUALLY WITH NODE GROUPS (RELATIVE EASE SCRIPT)
+======= STEP 1 - CREATE EKS IAM ROLE ==============
+- Navigate to IAM -> Roles -> Create Role. Select AWS Service and in "Use cases for other AWS services" section, scroll to EKS, then select EKS. When EKS is selected, other EKS options pop up, select EKS - Cluster. Click Next
+
+- Next stage requires adding permission and the AmazonEKSClusterPolicy is automatically selected already. Click Next 
+
+- The next stage is to enter the role name, review selections and create. In the Role name section, enter "eks-cluster-role" as the role name (can be anything but better to choose it for consistency).
+
+- Finally click on Create Role and Role will be crreated. You will also find it in the list of your roles (if you have any already).
+
+STEP 1 COMPLETED
+
+======= STEP 2 - CREATE VPC FOR WORKER NODES WITH AWS CLOUD FORMATION ==============
+- Navigate to a region you're comfortable with. For this script, we will use us-west-2 (Oregon).
+
+- Click on CloudFormation and then Create Stack. We will be using a prepared public and private subnets template stored on AWS's S3 bucket (https://s3.us-west-2.amazonaws.com/amazon-eks/cloudformation/2020-10-29/amazon-eks-vpc-private-subnets.yaml) and this will be used to provision a VPC with 2 public and 2 private subnets. 
+
+- From the Prerequisite - Prepare template section, select the "Template is ready" option.
+
+- In the Specify template section, choose the Amazon S3 URL option and paste the link to the yaml file:
+  https://s3.us-west-2.amazonaws.com/amazon-eks/cloudformation/2020-10-29/amazon-eks-vpc-private-subnets.yaml
+Click Next after pasting the link
+
+- Enter the name of your stack: eks-worker-node-vpc-stack and click next; leave the rest of the configuration as-is continue to keep clicking next until the last stage and click Create Stack.
+
+- It will lead you to the events page where you will see the stack being created and when done (may take up to 5 minutes), it shows, CREATE COMPLETE.
+
+- Leave the Page for CloudFormation open as you will need the parameters in the output tab of the stack you created
+
+STEP 2 COMPLETE
+
+======= STEP 3 - CREATE EKS CLUSTER (MASTER NODES & CONTROL PLANE) ==============
+- Navigate to the EKS service page of your region (us-west-2). Services -> Elastic Kubernetes Service (EKS). 
+
+- Click on Add Cluster and select create
+
+- In the next page, enter a name for your cluster (I chose eks-cluster-test) choose version 1.21 (latest version as of the time of this script creation). 
+
+- In the Cluster Service Role section, it should automatically choose the eks-cluster-role Role that you created in Step 1 if well configured. Leave other settings as is and Click next
+
+- The next page requests that you specify networking. Click on the drop down and select the VPC you created from CloudFormation (eks-worker-node-vpc-stack). When you select this VPC, it automatically selects its related subnets.
+
+- Ensure you select the correct security group, it should have the keyword - eks-worker-node-vpc-stack in its composition. 
+
+- In the Cluster endpoint access section, select Public and Private.
+
+- Leave other settings as-is (CNI, CoreDNS, kube-proxy) and click next.
+
+- Next is to configure logging, there is no need to enable any feature since EKS is logging in its fully managed service already.
+
+- When all review is fine, click Create. 
+  # Note that EKS is not free, so once you are done with the Demo, delete your cluster. Costs can accummulate quickly. 
+
+======= STEP 4 - INSTALL & CONNECT KUBECTL WITH EKS CLUSTER ==============
+- You need a running EC2 instance in order to install kubectl that will communicate with your cluster. Create an EC2 instance, preferably Ubuntu, t2.micro is fine and follow the instructions below to install aws cli first then kubectl.
+
+    - INSTALL AWS CLI
+    
+    $ sudo apt-get update
+    
+    $ sudo apt-get install awscli
+
+    - Create an IAM User by going to Services -> IAM -> Users -> Add Users in the AWS console. Click on create user and name it AwsCLIUser
+
+      - Click on Next (Permissions): In the permissions page, click on attach existing policies directly. 
+
+      - Search for AdministratorAccess, check the box and click on next. AmazonEKSClusterPolicy
+
+      - Review the policies and click on create user. 
+
+      - Download the credentials and save it on your PC as you'll be needing it from time to time.
+
+    - When user successfully completed, copy the access key ID and secret key that was just created into the prompt after you run the command in your EC2 terminal (they are also available in your CSV file): 
+
+    $ aws configure
+
+      - Enter your access key and secret key then choose the correct region where you are running your EKS cluster (for me us-west-2). Enter JSON for default output format. Press enter when done.
+
+    - Update your instance again to include new dependencies then install kubectl and connect to your EKS cluster.
+
+    $ sudo apt-get update
+
+    $ curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
+
+    $ chmod +x ./kubectl
+
+    $ sudo mv ./kubectl /usr/local/bin/kubectl
+
+    $ aws eks update-kubeconfig --name eks-cluster-test
+
+  - If the kubeconfig is successful, it will return a message "Added new context arn: aws:eks..."
+  
+  - Test your kubectl to be sure its working by checking all namespaces in your eks cluster: 
+      $ kubectl get ns
+
+  - You can also try to check the EKS cluster info by running the command: 
+      $ kubectl cluster-info
+
+END OF STEP 4
+======= STEP 5 - CREATE EC2 IAM ROLE FOR NODE GROUP ==============
+- On AWS console navigate to IAM -> Roles and click on AWS service
+
+- Click on EC2 as common use case then click next
+
+- Choose the following three policies on the permission policies section: 
+    - AmazonEKSWorkerNodePolicy
+    - AmazonEC2ContainerRegistryReadOnly
+    - AmazonEKS_CNI_Policy
+  Click next
+
+- In the role name section, enter "eks-node-group-role". Click create role
+
+END OF STEP 5
+
+======= STEP 6 - CREATE NODE GROUP AND ATTACH TO EKS CLUSTER ==============
+- In the Cluster you have created in EKS on the console, scroll down to node group in the compute tab and select "Add node group"
+
+- Name it eks-node-group and select the eks-node-group-role created in step 5 as the Node IAM role. Click on next
+
+- In the AMI type, leave it at Amazon Linux. In the instance type, select t3.small and leave the other sides of the section as is. 
+
+- In the Node Group Scaling configuration section, choose the following config:
+    -   Minimum size: 1 node
+    -   Maximum size: 3 nodes (we will be testing the autoscaling)
+    -   Desired size: 2 nodes
+  When configured, click on next
+
+- The specify networking section should bring you the subnets you chose with your created EKS VPC. 
+
+- Enable the Configure SSH access to your nodes section and select a key pair you already have. If you don't have a key pair, go to Services -> EC2 -> Key Pairs  and create a key pair (there's a link to o to the corresponding page in the EC2 console, open in a new tab). Come back to use the key pair you have created (I called my key pair eks-node-keys).
+
+- In the section for "Allow SSH remote access from", select all so you can reach your nodegroup from outside the security group (for now)
+
+- Click Create
+
+- you can confirm that your instances are being initialized by going to Services -> EC2 -> Instances. You would see that 2 instances have been provisioned with t3.small config and in 2 different AZs.
+
+- Also you can check from the terminal that the node groups have been provisioned by running the command:
+
+    $ kubectl get nodes
+
+END OF STEP 6
+
+======= STEP 7 - CONFIGURE CLUSTER AUTOSCALING ==============
+- First thing is to create a policy and attach to the eks
+    On AWS console go to Services -> IAM -> Policies then create a new policy. We will be creating a custom policy. 
+
+- Click on Create Policy and in the JSON tab replace the script in it with the below: 
+      {
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Action": [
+                "autoscaling:DescribeAutoScalingGroups",
+                "autoscaling:DescribeAutoScalingInstances",
+                "autoscaling:DescribeLaunchConfigurations",
+                "autoscaling:DescribeTags",
+                "autoscaling:SetDesiredCapacity",
+                "autoscaling:TerminateInstanceInAutoScalingGroup",
+                "ec2:DescribeLaunchTemplateVersions"
+            ],
+            "Resource": "*",
+            "Effect": "Allow"
+        }
+    ]
+}
+
+- Click on next, takes you to the tags page, do nothing and just click next.
+
+- In the role name section, enter node-group-autoscale-policy as name and click on create policy.
+
+- Still in the IAM section, navigate to Roles and select the eks-node-group-role. Under the list of policies for the role, click add permissions and attach policies.
+
+- It will list a couple of AWS policies, check the policy just created (node-group-autoscale-policy) and click attach policies. 
+
+- Apply the modified cluster autoscaler configs file to your eks cluster with the following command to your instance with kubectl installed:
+    $ kubectl apply -f https://github.com/aanuoluwapoakinyera/k8s-configuration/blob/dev/cluster-autoscaler-autodiscover.yml
+
+- It will output a number of components created in your cluster.
+
+STEP 7 FINISHED
+======= STEP 8 - DEPLOY NGINX CONTAINER TO OUR EKS CLUSTER AND TEST REPLICA & AUTOSCALING ==============
+
