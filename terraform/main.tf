@@ -1,7 +1,9 @@
+### Provider access & secret keys are in AWS-Keys/AWS Scripts folder on localhost
+### Replace with your access keys
 provider "aws" {
     region = "us-west-2"
-    access_key = "AKIA5PKMJEY2H7TJQ4B6"
-    secret_key = "P7+WozPQuu6iyKu9G4OvZexeN4CPMEulz7z7pe6Z"
+    access_key = "enteryouraccesskeyhere"
+    secret_key = "enteryoursecretkeyhere"
 }
 
 resource "aws_vpc" "demo-vpc" {
