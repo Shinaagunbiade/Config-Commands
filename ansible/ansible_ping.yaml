@@ -1,0 +1,4 @@
+# Run with command on terminal or CLI
+# ansible aws-hosts -i hosts -m ping    
+# Its a module that pings your servers
+# End
