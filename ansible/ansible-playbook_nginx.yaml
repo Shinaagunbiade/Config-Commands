@@ -14,15 +14,4 @@
       name: nginx
       state: started
 
-- name: install awscli
-  hosts: aws_hosts
-  become: yes #this line is needed so you can run as a root user
-  tasks:
-  - name: ping servers
-    action: ping
-  - name: install nginx server
-    apt:
-      name: awscli
-      state: latest
-
 ### Run command with ansible-playbook -i hosts ansible-playbook_nginx.yaml
