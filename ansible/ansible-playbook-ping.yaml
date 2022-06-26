@@ -1,0 +1,9 @@
+---
+- name: Configure nginx web server
+  hosts: aws_hosts
+  tasks:
+  - name: ping servers
+    action: ping
+
+
+### Run command with ansible-playbook -i hosts ansible-playbook-ping.yaml

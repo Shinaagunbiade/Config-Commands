@@ -1,0 +1,94 @@
+---
+- name: Configure nginx web server
+  hosts: aws_hosts
+  become: yes #this line is needed so you can run as a root user
+  tasks:
+  - name: ping servers
+    action: ping
+  - name: update server
+    apt: upgrade=dist force_apt_get=yes
+  - name: install nginx server
+    apt:
+      name: nginx
+      state: latest
+  - name: start nginx server
+    service:
+      name: nginx
+      state: started
+
+- name: install docker
+  hosts: aws_hosts
+  become: yes #this line is needed so you can run as a root user
+  vars:
+    container_count: 4
+    default_container_name: docker
+    default_container_image: ubuntu
+    default_container_command: sleep 1
+  tasks:
+    - name: Install aptitude
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: true
+
+    - name: Install required system packages
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+          - virtualenv
+          - python3-setuptools
+        state: latest
+        update_cache: true
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: true
+
+    - name: Install Docker Module for Python
+      pip:
+        name: docker
+
+    - name: Pull default Docker image
+      community.docker.docker_image:
+        name: "{{ default_container_image }}"
+        source: pull
+
+    - name: Create default containers
+      community.docker.docker_container:
+        name: "{{ default_container_name }}{{ item }}"
+        image: "{{ default_container_image }}"
+        command: "{{ default_container_command }}"
+        state: present
+      with_sequence: count={{ container_count }}
+
+#AWSCLI installation to be troubleshooted
+#- name: Install AWS CLI
+#  hosts: aws_hosts
+#  become: yes #this line is needed so you can run as a root user
+#  tasks:
+#    - name: Install Python PIP
+#      apt: pkg=python-pip state=latest
+#
+#    - name: Install boto via PIP
+#      pip: name=boto state=latest
+#
+#    - name: Install AWS CLI
+#      pip: name=awscli state=latest
+
+### Run command with ansible-playbook -i hosts ansible-playbook-server-configs.yaml

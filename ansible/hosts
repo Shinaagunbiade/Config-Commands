@@ -1,0 +1,9 @@
+# Replace the hosts ip with your instance ip, smae with username & pemfile
+[aws_hosts]
+18.219.223.224
+3.137.203.123
+
+[aws_hosts:vars]
+ansible_ssh_private_key_file=~/Key26.pem
+ansible_user=ubuntu
+ansible_python_interpreter=/usr/bin/python3
