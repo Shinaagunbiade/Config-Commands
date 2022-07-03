@@ -92,3 +92,7 @@
 #      pip: name=awscli state=latest
 
 ### Run command with ansible-playbook -i hosts ansible-playbook-server-configs.yaml
+
+### OR if you have hosts file configured in ansible.cfg
+
+### Run command with ansible-playbook ansible-playbook-server-configs.yaml
