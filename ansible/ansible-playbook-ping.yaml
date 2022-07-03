@@ -1,5 +1,5 @@
 ---
-- name: Configure nginx web server
+- name: Ping selected servers
   hosts: aws_hosts
   tasks:
   - name: ping servers
