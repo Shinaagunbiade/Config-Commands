@@ -1,0 +1,43 @@
+---
+# Resources: https://www.digitalocean.com/community/tutorials/how-to-create-a-kubernetes-cluster-using-kubeadm-on-ubuntu-18-04
+# Resources: edit: https://www.arubacloud.com/tutorial/how-to-create-kubernetes-cluster-with-kubeadm-and-ansible-ubuntu-20-04.aspx
+- hosts: all
+  become: yes
+  tasks:
+
+  # Ensure docker is installed before running this script, you can run docker with the ansible script
+   - name: install APT Transport HTTPS
+     apt:
+       name: apt-transport-https
+       state: present
+
+   - name: add Kubernetes apt-key
+     apt_key:
+       url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+       state: present
+
+   - name: add Kubernetes' APT repository
+     apt_repository:
+      repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+      state: present
+      filename: 'kubernetes'
+
+   - name: install kubelet
+     apt:
+       name: kubelet
+       state: present
+       update_cache: true
+
+   - name: install kubeadm
+     apt:
+       name: kubeadm
+       state: present
+
+- hosts: master
+  become: yes
+  tasks:
+   - name: install kubectl
+     apt:
+       name: kubectl
+       state: present
+       force: yes

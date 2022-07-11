@@ -1,0 +1,87 @@
+---
+- name: install docker
+  hosts: all
+  become: yes #this line is needed so you can run as a root user
+  tasks:
+    - name: Install aptitude
+      apt:
+        name: aptitude
+        state: latest
+        update_cache: true
+
+    - name: Install required system packages
+      apt:
+        pkg:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+          - python3-pip
+          - virtualenv
+          - python3-setuptools
+        state: latest
+        update_cache: true
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu focal stable
+        state: present
+
+    - name: Update apt and install docker-ce
+      apt:
+        name: docker-ce
+        state: latest
+        update_cache: true
+
+    - name: Install Docker Module for Python
+      pip:
+        name: docker
+
+    - name: Update apt packages
+      apt:
+        update_cache: yes
+      tags:
+        - docker
+    
+    - name: Add "ubuntu" user to "docker" group
+      user:
+        name: "ubuntu"
+        group: "docker"
+        append: yes
+      tags:
+        - docker
+    - name: Install docker-compose from official github repo
+      get_url:
+        url : https://github.com/docker/compose/releases/download/1.29.2/docker-compose-Linux-x86_64
+        dest: /usr/local/bin/docker-compose
+        mode: 'u+x,g+x'
+
+    - name: Get Docker-Compose version
+      shell: docker-compose --version  
+      args:   
+        executable: /bin/bash 
+    
+    - name: Check if docker-compose is installed #Extensive checks to see if docker-compose is installed and get version
+      shell: command -v docker-compose >/dev/null 2>&1
+      register: is_docker_compose_install
+      ignore_errors: yes
+    - debug: msg="{{ is_docker_compose_install.rc }}" # it returns rc 1
+    - debug: var=is_docker_compose_install
+    - name: Run only if compose is installed
+      shell: command docker-compose --version
+      register: print_version
+      ignore_errors: yes
+      when: is_docker_compose_install.rc == 0
+    - debug: msg="{{ print_version.stdout }}"
+
+### Note to self: Make sure to add a reboot command, sleep for 120 seconds and ping to be sure server is back up
+### Run command with ansible-playbook -i hosts ansible-playbook-docker-ubuntu.yaml
+
+### OR if you have hosts file configured in ansible.cfg
+
+### Run command with ansible-playbook ansible-playbook-docker-ubuntu.yaml
