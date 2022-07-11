@@ -1,29 +1,7 @@
 ---
-- name: Configure nginx web server
-  hosts: aws_hosts
-  become: yes #this line is needed so you can run as a root user
-  tasks:
-  - name: ping servers
-    action: ping
-  - name: update server
-    apt: upgrade=dist force_apt_get=yes
-  - name: install nginx server
-    apt:
-      name: nginx
-      state: latest
-  - name: start nginx server
-    service:
-      name: nginx
-      state: started
-
 - name: install docker
   hosts: aws_hosts
   become: yes #this line is needed so you can run as a root user
-  vars:
-    container_count: 4
-    default_container_name: docker
-    default_container_image: ubuntu
-    default_container_command: sleep 1
   tasks:
     - name: Install aptitude
       apt:
@@ -64,19 +42,6 @@
       pip:
         name: docker
 
-    - name: Pull default Docker image
-      community.docker.docker_image:
-        name: "{{ default_container_image }}"
-        source: pull
-
-    - name: Create default containers
-      community.docker.docker_container:
-        name: "{{ default_container_name }}{{ item }}"
-        image: "{{ default_container_image }}"
-        command: "{{ default_container_command }}"
-        state: present
-      with_sequence: count={{ container_count }}
-
     - name: Update apt packages
       apt:
         update_cache: yes
@@ -114,22 +79,9 @@
       when: is_docker_compose_install.rc == 0
     - debug: msg="{{ print_version.stdout }}"
 
-#AWSCLI installation to be troubleshooted
-#- name: Install AWS CLI
-#  hosts: aws_hosts
-#  become: yes #this line is needed so you can run as a root user
-#  tasks:
-#    - name: Install Python PIP
-#      apt: pkg=python-pip state=latest
-#
-#    - name: Install boto via PIP
-#      pip: name=boto state=latest
-#
-#    - name: Install AWS CLI
-#      pip: name=awscli state=latest
-
-### Run command with ansible-playbook -i hosts ansible-playbook-server-configs.yaml
+### Note to self: Make sure to add a reboot command, sleep for 120 seconds and ping to be sure server is back up
+### Run command with ansible-playbook -i hosts ansible-playbook-docker-ubuntu.yaml
 
 ### OR if you have hosts file configured in ansible.cfg
 
-### Run command with ansible-playbook ansible-playbook-server-configs.yaml
+### Run command with ansible-playbook ansible-playbook-docker-ubuntu.yaml
