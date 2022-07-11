@@ -1,3 +1,4 @@
+# Steps to setting up KubeAdm Kubernetes cluster using Ansible
 - Create your working directory (kube-cluster) and cd into it
 - Update your hosts file and create your ansible.cfg file (if need be or use as-is)
 - Install Docker with the Ansible script - ansible-playbook-docker-ubuntu.yaml (or through any other convenient measure) on all servers
@@ -18,7 +19,7 @@
 - Worker nodes can then be set to join the control plane - workers.yml. 
 - You can now ssh into the master plane and run your kubectl commands (kubectl get nodes - all nodes MUST show ready, if not follow steps below)
     - If you do a kubectl describe nodes and see the error: node not ready problem 
-        # reference page: https://github.com/kubernetes/kubernetes/issues/48798
+        reference page: https://github.com/kubernetes/kubernetes/issues/48798
     - vi into /var/lib/kubelet/kubeadm-flags.env
     - Comment out the line KUBELET_KUBEADM_ARGS="--network-plugin=cni --pod-infra-container-image=k8s.gcr.io/pause:3.2"; and issue should be solved
 - Deploy a test container (Nginx by running the below commands)
